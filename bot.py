@@ -458,4 +458,295 @@ async def fund_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def fund_amt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    if text and text == "
+    if text and text == "❌ Cancel":
+        await update.message.reply_text("❌ ငွေဖြည့်ခြင်း ပယ်ဖျက်လိုက်ပါပြီ။", reply_markup=main_menu(update.effective_user.id))
+        return ConversationHandler.END
+    if not text or not text.isdigit():
+        await update.message.reply_text("⚠️ ဂဏန်းသီးသန့်သာ ရိုက်ပေးပါဗျ။", reply_markup=cancel_menu())
+        return U_AMT
+    context.user_data['amt'] = text
+    msg = ("Payment (K pay, Wave, UAB, AYA)\n<code>09959937103</code> (May Lwin Oo)\nNote မှာ shop လို့ ရေးပေးပါ\n\nငွေလွှဲပီး ပြေစာ ပို့ပေးပါဗျ")
+    await update.message.reply_text(msg, parse_mode='HTML', reply_markup=cancel_menu())
+    return U_SS
+
+async def fund_ss(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if text and text == "❌ Cancel":
+        await update.message.reply_text("❌ ငွေဖြည့်ခြင်း ပယ်ဖျက်လိုက်ပါပြီ။", reply_markup=main_menu(update.effective_user.id))
+        return ConversationHandler.END
+    if not update.message.photo:
+        await update.message.reply_text("⚠️ SS ပုံလေး ပို့ပေးပါဗျ။")
+        return U_SS
+    uid, uname = update.effective_user.id, update.effective_user.username or "User"
+    amt = context.user_data['amt']
+    txid = '#' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    await update.message.reply_text(f"✅ Add Fund Request Sent!\nAmt: ${amt}\nTXID: {txid}", reply_markup=main_menu(uid))
+    c = db.cursor()
+    c.execute("SELECT level FROM users WHERE user_id=?", (uid,))
+    lvl = c.fetchone()[0]
+    emo = LVL_EMOJI.get(lvl, '🥉 Member')
+    admin_msg = f"🔔 <b>New Fund Request</b>\nUser: <code>{uid}</code> | @{uname}\nTier: {emo}\nAmt: ${amt}\n<code>/wallet {uid} {amt} {txid}</code>"
+    await context.bot.send_photo(chat_id=ADMIN_ID, photo=update.message.photo[-1].file_id, caption=admin_msg, parse_mode='HTML')
+    return ConversationHandler.END
+
+async def ap_add_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    await update.message.reply_text("📁 Category အမည် အသစ်ရိုက်ထည့်ပါ။ (ဥပမာ - TikTok Services)\nမလုပ်တော့ပါက ❌ Cancel နှိပ်ပါ။", reply_markup=cancel_menu())
+    return A_CAT
+
+async def ap_save_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if not text: return A_CAT
+    if text == "❌ Cancel":
+        await update.message.reply_text("Canceled.", reply_markup=admin_menu())
+        return ConversationHandler.END
+    try:
+        db.cursor().execute("INSERT INTO categories VALUES (?)", (text,))
+        db.commit()
+        await update.message.reply_text(f"✅ Category '{text}' ဆောက်ပြီးပါပြီ။", reply_markup=admin_menu())
+    except:
+        await update.message.reply_text("⚠️ နာမည်တူ ရှိပြီးသားပါ။", reply_markup=admin_menu())
+    return ConversationHandler.END
+
+async def ap_add_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    c = db.cursor()
+    c.execute("SELECT name FROM categories")
+    cats = c.fetchall()
+    if not cats:
+        await update.message.reply_text("⚠️ Category အရင်ဆောက်ပါ။", reply_markup=admin_menu())
+        return ConversationHandler.END
+    kb = [[InlineKeyboardButton(c[0], callback_data=f"aci_{c[0]}")] for c in cats]
+    await update.message.reply_text("👇 မည်သည့် Category အောက်တွင် ထည့်မည်နည်း?", reply_markup=InlineKeyboardMarkup(kb))
+    return A_ITEM_CAT
+
+async def ap_item_cat_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data['a_cat'] = query.data.split("_")[1]
+    await context.bot.send_message(query.message.chat_id, f"📁 {context.user_data['a_cat']} ရွေးချယ်ထားသည်။\n\nItem Name ရိုက်ထည့်ပါ (ဥပမာ - TikTok Likes 1000):", reply_markup=cancel_menu())
+    return A_ITEM_NAME
+
+async def ap_item_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if not text: return A_ITEM_NAME
+    if text == "❌ Cancel":
+        await update.message.reply_text("Canceled.", reply_markup=admin_menu())
+        return ConversationHandler.END
+    context.user_data['a_name'] = text
+    await update.message.reply_text("Shortcode သတ်မှတ်ပါ (Space မပါရ၊ ဥပမာ - tt_likes_1000):")
+    return A_ITEM_SC
+
+async def ap_item_sc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if not text: return A_ITEM_SC
+    if text == "❌ Cancel":
+        await update.message.reply_text("Canceled.", reply_markup=admin_menu())
+        return ConversationHandler.END
+    context.user_data['a_sc'] = text
+    await update.message.reply_text("ဈေးနှုန်း ၃ မျိုး Space ခြားရိုက်ပါ\n(Normal Silver Gold)\nဥပမာ - 4000 3000 2000")
+    return A_ITEM_PRICE
+
+async def ap_item_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if not text: return A_ITEM_PRICE
+    if text == "❌ Cancel":
+        await update.message.reply_text("Canceled.", reply_markup=admin_menu())
+        return ConversationHandler.END
+    try:
+        p = text.split()
+        n, s, g = float(p[0]), float(p[1]), float(p[2])
+        context.user_data['a_n_price'] = n
+        context.user_data['a_s_price'] = s
+        context.user_data['a_g_price'] = g
+        
+        await update.message.reply_text(
+            "🔢 Shweboost Service ID ထည့်ပါ။\n\n"
+            "TikTok Likes → 491\n"
+            "TikTok Views → 495\n"
+            "TikTok Followers → 410\n\n"
+            "ဥပမာ - 491"
+        )
+        return A_ITEM_SERVICE
+    except:
+        await update.message.reply_text("⚠️ Format မှားယွင်းနေပါသည်။ ဥပမာ - 4000 3000 2000", reply_markup=admin_menu())
+        return ConversationHandler.END
+
+async def ap_item_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if not text: return A_ITEM_SERVICE
+    if text == "❌ Cancel":
+        await update.message.reply_text("Canceled.", reply_markup=admin_menu())
+        return ConversationHandler.END
+    try:
+        service_id = int(text)
+        sc = context.user_data['a_sc']
+        name = context.user_data['a_name']
+        cat = context.user_data['a_cat']
+        n = context.user_data['a_n_price']
+        s = context.user_data['a_s_price']
+        g = context.user_data['a_g_price']
+        
+        c = db.cursor()
+        c.execute("INSERT INTO products (shortcode, category, name, n_price, s_price, g_price, service_id) VALUES (?,?,?,?,?,?,?)",
+                  (sc, cat, name, n, s, g, service_id))
+        db.commit()
+        await update.message.reply_text(f"✅ API Product '{name}' ထည့်သွင်းပြီးပါပြီ။\n\nService ID: {service_id}\n\nUser များ ဝယ်ယူနိုင်ပါပြီ။", reply_markup=admin_menu())
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Error: {e}", reply_markup=admin_menu())
+    return ConversationHandler.END
+
+async def admin_cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    text = update.message.text or update.message.caption
+    if not text: return
+    args = text.split()
+    cmd = args[0].lower()
+    c = db.cursor()
+    now_str = mm_time().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        if cmd == "/send":
+            msg_to_send = text.replace("/send", "", 1).strip()
+            has_photo = bool(update.message.photo)
+            photo_file_id = update.message.photo[-1].file_id if has_photo else None
+            if not msg_to_send and not has_photo:
+                return await update.message.reply_text("⚠️ ပို့မည့် စာ သို့မဟုတ် ပုံ ထည့်ပေးပါ။\nဥပမာ - /send Hello All")
+            c.execute("SELECT user_id FROM users")
+            users = c.fetchall()
+            success, fail = 0, 0
+            await update.message.reply_text("🚀 Broadcast စတင်နေပါပြီ... ခေတ္တစောင့်ပါ။")
+            for u in users:
+                try:
+                    if has_photo:
+                        await context.bot.send_photo(chat_id=u[0], photo=photo_file_id, caption=msg_to_send, parse_mode='HTML')
+                    else:
+                        await context.bot.send_message(chat_id=u[0], text=msg_to_send, parse_mode='HTML')
+                    success += 1
+                except:
+                    fail += 1
+            await update.message.reply_text(f"✅ Broadcast ပြီးဆုံးပါပြီ။\nအောင်မြင်: {success} ဦး\nမအောင်မြင်: {fail} ဦး")
+            return
+        if cmd == "/wallet" and len(args) == 4:
+            uid, amt, txid = int(args[1]), float(args[2]), args[3]
+            c.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amt, uid))
+            c.execute("INSERT INTO history (user_id, type, amount, detail, date) VALUES (?,?,?,?,?)", (uid, 'Add Fund', amt, txid, now_str))
+            db.commit()
+            c.execute("SELECT balance, level FROM users WHERE user_id=?", (uid,))
+            res = c.fetchone()
+            new_bal, lvl = res[0], res[1]
+            emo = LVL_EMOJI.get(lvl, '🥉').split()[0]
+            await update.message.reply_text(f"✅ <b>Fund Added</b>\nID: <code>{uid}</code> | {emo}\nAmt: +${amt}\nBal: ${new_bal:,.0f}", parse_mode='HTML')
+            await context.bot.send_message(uid, f"🎉 ငွေဖြည့်သွင်းမှု အောင်မြင်ပါသည်!\nပမာဏ: ${amt:,.0f}\nလက်ကျန်ငွေ: ${new_bal:,.0f}", parse_mode='HTML')
+        elif cmd == "/minus" and len(args) == 3:
+            uid, amt = int(args[1]), float(args[2])
+            c.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (amt, uid))
+            c.execute("INSERT INTO history (user_id, type, amount, detail, date) VALUES (?,?,?,?,?)", (uid, 'Minus Fund', amt, 'Admin Deducted', now_str))
+            db.commit()
+            c.execute("SELECT balance, level FROM users WHERE user_id=?", (uid,))
+            res = c.fetchone()
+            new_bal, lvl = res[0], res[1]
+            emo = LVL_EMOJI.get(lvl, '🥉').split()[0]
+            await update.message.reply_text(f"✅ <b>Minus Success</b>\nID: <code>{uid}</code> | {emo}\nAmt: -${amt}\nBal: ${new_bal:,.0f}", parse_mode='HTML')
+            await context.bot.send_message(uid, f"⚠️ သင့်အကောင့်မှ ငွေ ${amt:,.0f} နှုတ်ယူသွားပါသည်။\nလက်ကျန်ငွေ: ${new_bal:,.0f}", parse_mode='HTML')
+        elif cmd == "/ban" and len(args) == 2:
+            uid = int(args[1])
+            c.execute("UPDATE users SET is_banned=1 WHERE user_id=?", (uid,))
+            db.commit()
+            await update.message.reply_text(f"🚫 User {uid} ကို Ban လိုက်ပါပြီ။")
+        elif cmd == "/unban" and len(args) == 2:
+            uid = int(args[1])
+            c.execute("UPDATE users SET is_banned=0 WHERE user_id=?", (uid,))
+            db.commit()
+            await update.message.reply_text(f"✅ User {uid} ကို Unban လိုက်ပါပြီ။")
+        elif cmd in ["/setnormal", "/setsilver", "/setgold"] and len(args) == 2:
+            uid = int(args[1])
+            level = cmd.replace('/set', '').capitalize()
+            c.execute("UPDATE users SET level = ? WHERE user_id = ?", (level, uid))
+            db.commit()
+            emoji = LVL_EMOJI[level]
+            await update.message.reply_text(f"✅ User <code>{uid}</code> is now {emoji}.", parse_mode='HTML')
+            await context.bot.send_message(uid, f"🎉 သင့်အကောင့်ကို Admin မှ {emoji} အဖြစ် သတ်မှတ်လိုက်ပါသည်။", parse_mode='HTML')
+        elif cmd in ["/np", "/sp", "/gp"] and len(args) == 3:
+            sc, price = args[1], float(args[2])
+            col = "n_price" if cmd == "/np" else ("s_price" if cmd == "/sp" else "g_price")
+            c.execute(f"UPDATE products SET {col}=? WHERE shortcode=?", (price, sc))
+            db.commit()
+            await update.message.reply_text(f"✅ <code>{sc}</code> ၏ ဈေးနှုန်းအား ${price} သို့ ပြင်ဆင်ပြီးပါပြီ။", parse_mode='HTML')
+        elif cmd == "/editcat" and len(args) >= 2:
+            old_cat, new_cat = text.split(' ', 1)[1].split('>')
+            old_cat, new_cat = old_cat.strip(), new_cat.strip()
+            c.execute("UPDATE categories SET name=? WHERE name=?", (new_cat, old_cat))
+            c.execute("UPDATE products SET category=? WHERE category=?", (new_cat, old_cat))
+            db.commit()
+            await update.message.reply_text(f"✅ '{old_cat}' မှ '{new_cat}' သို့ ပြောင်းလဲပြီးပါပြီ။")
+        elif cmd == "/edititem" and len(args) >= 3:
+            parts = text.split(maxsplit=2)
+            sc, new_name = parts[1], parts[2]
+            c.execute("UPDATE products SET name=? WHERE shortcode=?", (new_name, sc))
+            db.commit()
+            await update.message.reply_text(f"✅ Item <code>{sc}</code> အမည်ကို '{new_name}' သို့ ပြောင်းလဲပြီးပါပြီ။", parse_mode='HTML')
+        elif cmd == "/delitem" and len(args) == 2:
+            sc = args[1]
+            c.execute("DELETE FROM products WHERE shortcode=?", (sc,))
+            db.commit()
+            await update.message.reply_text(f"🗑 Item <code>{sc}</code> အား ဖျက်လိုက်ပါပြီ။", parse_mode='HTML')
+        elif cmd in ["/whist", "/bhist"] and len(args) == 2:
+            uid = int(args[1])
+            htype = 'wallet' if cmd == '/whist' else 'buy'
+            t_filter = "IN ('Add Fund', 'Minus Fund')" if cmd == "/whist" else "='Buy'"
+            c.execute(f"SELECT id, type, amount, detail, date FROM history WHERE user_id=? AND type {t_filter} ORDER BY id DESC", (uid,))
+            hists = c.fetchall()
+            if not hists: return await update.message.reply_text("⚠️ မှတ်တမ်း မရှိပါ။")
+            c.execute("SELECT level FROM users WHERE user_id=?", (uid,))
+            res = c.fetchone()
+            lvl_emo = LVL_EMOJI.get(res[0], '🥉').split()[0] if res else '🥉'
+            msg = f"🕋 <b>Admin {'Wallet' if cmd=='/whist' else 'Buy'} History for <code>{uid}</code> {lvl_emo} (Page 1)</b>\n━━━━━━━━━━━━━━━\n\n"
+            for h in hists[:5]: msg += build_history_text(h) + "━━━━━━━━━━━━━━━\n"
+            kb = []
+            if len(hists) > 5: kb.append([InlineKeyboardButton("Next ➡️", callback_data=f"hist_{uid}_1_{htype}")])
+            await update.message.reply_text(msg, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(kb) if kb else None)
+    except Exception as e:
+        logger.error(f"Admin CMD Error: {e}")
+        await update.message.reply_text("⚠️ Command Format မှားယွင်းနေပါသည်။")
+
+async def error_h(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("System Error:", exc_info=context.error)
+
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+    
+    fund_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(fund_start, pattern="^btn_addfund$")],
+        states={U_AMT: [MessageHandler(filters.TEXT, fund_amt)], U_SS: [MessageHandler(filters.PHOTO | filters.TEXT, fund_ss)]},
+        fallbacks=[MessageHandler(filters.Regex("^❌ Cancel$"), fund_amt)]
+    )
+    
+    admin_conv = ConversationHandler(
+        entry_points=[
+            MessageHandler(filters.Regex("^➕ New Category$"), ap_add_cat),
+            MessageHandler(filters.Regex("^➕ New Item$"), ap_add_item)
+        ],
+        states={
+            A_CAT: [MessageHandler(filters.TEXT, ap_save_cat)],
+            A_ITEM_CAT: [CallbackQueryHandler(ap_item_cat_cb, pattern="^aci_")],
+            A_ITEM_NAME: [MessageHandler(filters.TEXT, ap_item_name)],
+            A_ITEM_SC: [MessageHandler(filters.TEXT, ap_item_sc)],
+            A_ITEM_PRICE: [MessageHandler(filters.TEXT, ap_item_price)],
+            A_ITEM_SERVICE: [MessageHandler(filters.TEXT, ap_item_service)],
+        },
+        fallbacks=[MessageHandler(filters.Regex("^❌ Cancel$"), ap_save_cat)]
+    )
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(fund_conv)
+    app.add_handler(admin_conv)
+    app.add_handler(CallbackQueryHandler(dynamic_callbacks, pattern="^(b_|hist_|rep_|ulist_)"))
+    app.add_handler(MessageHandler(filters.COMMAND | (filters.PHOTO & filters.CaptionRegex(r'^/')), admin_cmds))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    app.add_error_handler(error_h)
+    
+    print("🚀 Little Moon Shop PRO with Shweboost API is Running...")
+    app.run_polling()
+
+if __name__ == '__main__':
+    main()
